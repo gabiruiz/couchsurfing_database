@@ -1,0 +1,218 @@
+CREATE TABLE projet.type_logement(
+   nom VARCHAR(50) NOT NULL,
+   description VARCHAR(50) NULL,
+   type_log_id SERIAL PRIMARY KEY);
+
+CREATE TABLE projet.logement(
+   nom VARCHAR(50) NOT NULL,
+   date_entree_dispo DATE NOT NULL,
+   date_sortie_dispo DATE NOT NULL,
+   type_log_id INTEGER NOT NULL,
+   insee_com INTEGER NOT NULL,
+   logement_id SERIAL PRIMARY KEY);
+
+CREATE TABLE projet.sejour(
+   date_entree DATE NOT NULL,
+   date_sortie DATE NOT NULL,
+   confirmed BOOLEAN NOT NULL,
+   rejected BOOLEAN NOT NULL,
+   cancelled BOOLEAN NOT NULL,
+   logement_id INTEGER NOT NULL,
+   sejour_id SERIAL PRIMARY KEY);
+
+CREATE TABLE projet.utilisateur(
+   prenom VARCHAR(50) NOT NULL,
+   nom VARCHAR(50) NOT NULL,
+   email VARCHAR(50) NOT NULL,
+   bio VARCHAR(50) NULL,
+   note_host SMALLINT NULL,
+   note_guest SMALLINT NULL,
+   mot_de_passe VARCHAR(50) NOT NULL,
+   sejour_id INTEGER NOT NULL,
+   utilisateur_id SERIAL PRIMARY KEY);
+
+CREATE TABLE projet.messages(
+   contenu VARCHAR(50) NOT NULL,
+   date_message DATE NOT NULL,
+   sejour_id INTEGER NOT NULL,
+   utilisateur_id INTEGER NOT NULL,
+   message_id SERIAL PRIMARY KEY);
+
+CREATE TABLE projet.avis_guests(
+   note_communication SMALLINT NULL,
+   note_amability SMALLINT NULL,
+   note_ouverture_esprit SMALLINT NULL,
+   date_avis_guests DATE NOT NULL,
+   commentaire VARCHAR(50) NULL,
+   sejour_id INTEGER NOT NULL,
+   utilisateur_id INTEGER NOT NULL,
+   avis_guests_id SERIAL PRIMARY KEY);
+
+CREATE TABLE projet.avis_logement(   
+   note_localisation SMALLINT NULL,
+   note_proprete SMALLINT NULL,
+   note_equipements SMALLINT NULL,
+   note_host SMALLINT NULL,
+   commentaire VARCHAR(50) NULL,
+   date_avis_log DATE NOT NULL,
+   sejour_id INTEGER NOT NULL,
+   utilisateur_id INTEGER NOT NULL,
+   avis_log_id SERIAL PRIMARY KEY);
+
+CREATE TABLE IF NOT EXISTS projet.region
+(
+    insee_reg character varying COLLATE pg_catalog."default" NOT NULL,
+    geom geometry(MultiPolygon,2154),
+    nom_reg character varying(35) COLLATE pg_catalog."default",
+    CONSTRAINT region_pkey PRIMARY KEY (insee_reg)
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS projet.region
+    OWNER to postgres;
+-- Index: sidx_region_geom
+
+-- DROP INDEX IF EXISTS projet.sidx_region_geom;
+
+CREATE INDEX IF NOT EXISTS sidx_region_geom
+    ON projet.region USING gist
+    (geom)
+    TABLESPACE pg_default;
+
+CREATE TABLE IF NOT EXISTS projet.commune
+(
+    insee_com character varying COLLATE pg_catalog."default" NOT NULL,
+    geom geometry(MultiPolygon,2154),
+    nom_com character varying(50) COLLATE pg_catalog."default",
+    code_reg character varying(2) COLLATE pg_catalog."default",
+    CONSTRAINT commune_pkey PRIMARY KEY (insee_com),
+    CONSTRAINT commune_fk FOREIGN KEY (code_reg)
+        REFERENCES projet.region (insee_reg) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION
+        NOT VALID
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS projet.commune
+    OWNER to postgres;
+-- Index: sidx_commune_geom
+
+-- DROP INDEX IF EXISTS projet.sidx_commune_geom;
+
+CREATE INDEX IF NOT EXISTS sidx_commune_geom
+    ON projet.commune USING gist
+    (geom)
+    TABLESPACE pg_default;
+
+* Étant donné qu'une réalisé l'import des tables spatiales, les champs sont sous format texte, je dois modifier la clef étrangère dans la table logement :
+ALTER TABLE projet.logement ALTER COLUMN insee_com TYPE VARCHAR (50);
+   
+INSERT INTO projet.type_logement VALUES 
+('Maison', '3 chambres dont 1 chambre de visite'),
+('Appartement', 'le canapé sera ton chez toi'),
+('Studio', 'je possède un matelas gonglable pour vous dépanner');
+   
+INSERT INTO projet.sejour VALUES 
+('2022-09-28', '2022-09-30', TRUE, FALSE, FALSE, '1'),
+('2022-12-24', '2022-12-25', FALSE, TRUE, FALSE, '2'),
+('2023-01-01', '2023-01-05', TRUE, TRUE, FALSE, '3');
+   
+INSERT INTO projet.logement VALUES 
+('2022-09-27', '2022-10-01', 1, '2A004' ),
+('2022-12-26', '2022-12-28', 2, '75111'),
+('2023-01-01', '2023-01-09', 3, '13201');  
+
+INSERT INTO projet.utilisateur VALUES 
+('Pedro', 'Gonzalez', 'pedrogonzalez1994@gmail.com', 'sympa et marrant', 7, 7, '123', 10),
+('Juan', 'Perez', 'juanucho@gmail.com','je kiffe les soirées et très aventurier', 3, 6, '321', 8),
+('Diego', 'Garcia', 'diegoperico@gmail.com', 'qq de simple intéressé par le yoga', 9, 8, '456', 9);
+
+INSERT INTO projet.avis_logement VALUES 
+(7, 10, 9, 7, 'il a été très accueillant mais un peu timide', '2023-01-02', 10, 1),
+(NULL, NULL, NULL,NULL, NULL, NULL, 8, 2),
+(6, 7, 6, 10, 'qq de très intéressant', '2023-01-06', 9, 3);
+
+INSERT INTO projet.avis_guests VALUES 
+(8, 9, 7, '2023-01-04', 'bon séjour chez lui', 10, 1),
+(NULL, NULL, NULL, NULL, NULL, 8, 2),
+(6, 7, 10, '2023-01-09', 'sympa, respectueux mais pas très propre', 9, 3);
+
+INSERT INTO projet.messages VALUES 
+('bonjour je compte visiter Ajaccio mes dates te conviennent', '2022-09-20', 10, 1),
+('yo ça va la miss es tu dispo pour faire la teuf', '2022-12-23', 8, 2),
+('salut je souhaterais visiter les calanques peux tu m accueillir', '2022-12-29', 9, 3);
+
+* Je me suis rendu compte que je m'avais trompé de personne lors de l'insertion des données à la table utilisateur :
+UPDATE projet.utilisateur
+SET sejour_id = 8
+WHERE sejour_id = 9;
+
+* il y a un doublon dans la base de donnée (note_host), il apparait dans deux tables alors qu'il devrait juste dans la table "utilisateur" (son profil) :
+ALTER TABLE projet.avis_logement DROP COLUMN note_host;
+
+1) Calculer le nombre de communes en ile-de-France
+SELECT COUNT (commune.nom_com) AS Nombre_communes
+FROM projet.commune
+WHERE code_reg like '11';
+
+2) Lister les hotes qui ont un logement plutot propre (note supérieure 5 sur 10)
+SELECT utilisateur_id, note_localisation
+FROM projet.avis_logement
+WHERE note_localisation > 5;
+
+3) Trouver l'hôte avec la note la plus haute. En faire de même avec l'invité. 
+SELECT prenom, nom, bio, note_host AS note_hôte
+FROM projet.utilisateur
+GROUP BY utilisateur.prenom, utilisateur.nom, utilisateur.bio, utilisateur.note_host
+ORDER BY utilisateur.note_host DESC
+LIMIT 1;
+
+--inivité--
+SELECT prenom, nom, bio, note_guest AS note_invité
+FROM projet.utilisateur
+GROUP BY utilisateur.prenom, utilisateur.nom, utilisateur.bio, utilisateur.note_guest
+ORDER BY utilisateur.note_guest DESC
+LIMIT 1;
+
+4) Lister les types de logement par ordre alphabétique en foncton de leur code insee
+SELECT type_logement.type_log_id, type_logement.nom, logement.insee_com
+FROM projet.type_logement
+JOIN projet.logement ON type_logement.type_log_id = logement.type_log_id
+ORDER BY type_logement.nom;
+
+5) Dans quelles communes se trouvent-t-ils ? 
+SELECT logement.type_log_id AS type_logement, commune.nom_com AS Nom_commune
+FROM projet.commune
+JOIN projet.logement ON commune.insee_com = logement.insee_com;
+
+6) Est-ce qu'il y a eu quelqu'un qui a vu sa demande refusée ? Pourquoi ?
+SELECT sejour_id, date_entree, date_Sortie
+FROM projet.sejour
+WHERE rejected is TRUE
+
+--pourquoi?--
+
+SELECT contenu, date_message
+FROM projet.messages
+WHERE sejour_id = 9
+
+
+7) Si je veux visiter la Corse début septembre et que je veux y rester 1 semaine, ai-je des chances de aller dormir chez l'habitant ?
+SELECT commune.nom_com, logement.date_entree_dispo, logement.date_sortie_dispo
+FROM projet.logement
+JOIN projet.commune ON logement.insee_com = commune.insee_com
+WHERE nom_com ilike 'ajaccio'
+
+--puis--
+SELECT (DATE '2022-09-01', INTERVAL '7 days') OVERLAPS
+       (DATE '2022-09-27', DATE '2022-10-01');
+
+8) En affichant les profils des hôtes, calculer la moyenne des notes de tous les critères qualifiant l'hôte et la comparer à sa propre note à lui. 
+SELECT utilisateur.prenom, utilisateur.nom, utilisateur.bio, utilisateur.note_host,
+ROUND (SUM (avis_logement.note_localisation + avis_logement.note_proprete + avis_logement.note_equipements)/3, 0) AS Note_moyenne
+FROM projet.avis_logement
+JOIN projet.utilisateur ON avis_logement.sejour_id = utilisateur.sejour_id
+GROUP BY utilisateur.prenom, utilisateur.nom, utilisateur.bio, utilisateur.note_host
